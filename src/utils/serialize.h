@@ -113,4 +113,73 @@ template<typename Stream> inline void Unserialize(Stream& s, float& a,          
 template<typename Stream> inline void Unserialize(Stream& s, double& a,                 int, int = 0 ) { READDATA(s, a);               }
 template<typename Stream> inline void Unserialize(Stream& s, bool& a,                   int, int = 0 ) { char f; READDATA(s, f); a = f;}
 
+/**
+ * Compact size
+ * size <  253         -- 1 byte
+ * size <= USHRT_MAX   -- 3 bytes  (253 + 2 bytes)
+ * size <= UINT_MAX    -- 5 bytes  (254 + 4 bytes)
+ * size >  UNIT_MAX    -- 9 bytes  (255 + 8 bytes)
+ */
+ inline unsigned int GetSizeOfCompactSize(uint64 nSize) {
+	 if (nSize < UCHAR_MAX - 2)    return sizeof(unsigned char);
+	 else if (nSize <= USHRT_MAX)  return sizeof(unsigned char) + sizeof(unsigned short);
+	 else if (nSize <= UINT_MAX)   return sizeof(unsigned char) + sizeof(unsigned int);
+	 else                          return sizeof(unsigned char) + sizeof(uint64);
+ }
+ 
+ template<typename Stream>
+ void WriteCompactSize(Stream& os, uint64 nSize) {
+	 if (nSize < UCHAR_MAX - 2) {
+		 unsigned char chSize = nSize;
+		 WRITEDATA(os, chSize);
+	 } else if(nSize <= USHRT_MAX) {
+		 unsigned char chSize = UCHAR_MAX - 2;
+		 unsigned short xSize = nSize;
+		 WRITEDATA(os, chSize);
+		 WRITEDATA(os, xSize);
+	 } else if(nSize <= UINT_MAX) {
+		 unsigned char chSize = UCHAR_MAX - 1;
+		 unsigned int xSize = nSize;
+		 WRITEDATA(os, chSize);
+		 WRITEDATA(os, xSize);
+	 } else {
+		 unsigned char chSize = UCHAR_MAX;
+		 WRITEDATA(os, chSize);
+		 WRITEDATA(os, nSize);
+	 }
+	 return;
+ }
+ 
+template<typename Stream>
+uint64 ReadCompactSize(Stream& is) {
+	unsigned char chSize;
+	READDATA(is, chSize);
+	if (chSize < UCHAR_MAX - 2) {
+		return chSize;
+	} else if (chSize == (UCHAR_MAX - 2)) {
+		unsigned short nSize;
+		READDATA(is, nSize);
+		return nSize;
+	} else if (chSize == (UCHAR_MAX - 1)) {
+		unsigned int nSize;
+		READDATA(is, nSize);
+		return nSize;
+	} else {
+		uint64 nSize;
+		READDATA(is, nSize);
+		return nSize;
+	}
+}
+
+/**
+ * Wrapper for serializing arrays and POD
+ */
+class CFlatData {
+	protected:
+		char* pbegin;
+		char* pend;
+	public:
+		CFlatData(void* pbeginIn, void* pendIn) : pbegin((char*)pbeginIn), pend((char*)pendIn) { }
+		
+}
 #endif

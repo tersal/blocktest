@@ -180,6 +180,13 @@ class CFlatData {
 		char* pend;
 	public:
 		CFlatData(void* pbeginIn, void* pendIn) : pbegin((char*)pbeginIn), pend((char*)pendIn) { }
+		char* begin() { return pbegin; }
+		const char* begin() const { return pbegin; }
+		char* end() { return pend; }
+		const char* end() const { return pend; }
 		
+		unsigned int GetSerializeSize(int, int=0) const {
+			return pend - pbegin;
+		}
 }
 #endif

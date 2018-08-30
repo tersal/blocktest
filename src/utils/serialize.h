@@ -188,5 +188,34 @@ class CFlatData {
 		unsigned int GetSerializeSize(int, int=0) const {
 			return pend - pbegin;
 		}
+		
+		template<typename Stream>
+		void Serialize(Stream& s, int, int = 0) const {
+			s.write(pbegin, pend - pbegin);
+		}
+		
+		template<typename Stream>
+		void Unserialize(Stream& s, int, int = 0) {
+			s.read(pbegin, pend - pbegin);
+		}
 }
+
+//
+// string stored as a fixed length field
+//
+template<std::size_t LEN>
+class CFixedFieldString {
+	protected:
+		const string* pcstr;
+		string* pstr;
+		
+	public:
+		explicit CFixedFieldString(const string& str) : pcstr(&str), pstr(NULL) { }
+		explicit CFixedFieldString(string& str) : pcstr(&str), pstr(&str) { }
+		
+		unsigned int GetSerializeSize(int, int = 0) const {
+			return LEN;
+		}
+}
+
 #endif

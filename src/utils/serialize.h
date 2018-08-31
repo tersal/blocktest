@@ -216,6 +216,40 @@ class CFixedFieldString {
 		unsigned int GetSerializeSize(int, int = 0) const {
 			return LEN;
 		}
+		
+		template<typename Stream>
+		void Serialize(Stream& s, int, int = 0) const {
+			char pszBuf[LEN];
+			strncpy(pzsBuf, pcstr->c_str(), LEN);
+			s.write(pszBuf, LEN)
+		}
+		
+		template<typename Stream>
+		void Unserialize(Stream& s, int, int = 0) {
+			if (pstr == NULL) {
+				throw std::ios_base::failure("CFixedFieldString::Unserialize : Trying to unserialize to const string");
+			}
+			char pzsBuf[LEN + 1];
+			s.read(pszBuf, LEN);
+			pszBuf[LEN] = '\0';
+			*pstr = pszBuf;
+		}
 }
 
+//
+// Forward declaration
+//
+
+// string
+template<typename C> unsigned int GetSerializeSize(const basic_string<C>& str, int, int = 0);
+template<typename Stream, typename C> void Serialize(Stream& os, const basic_string<C>& str, int, int = 0);
+template<typename Stream, typename C> void Unserialize(Stream& is, basic_string<C>& str, int, int = 0);
+
+// Vector
+template<typename T, typename A> unsigned int GetSerializeSize(const std::vector<T, A>& v, int nType, int nVersion, const boost::true_type&);
+template<typename T, typename A> unsigned int GetSerializeSize(const std::vector<T, A>& v, int nType, int nVersion, const boost::false_type&);
+template<typename T, typename A> inline unsigned int GetSerializeSize(const std::vector<T, A>& v, int nType, int nVersion = VERSION);
+template<typename Stream, typename T, typename A> void Serialize_impl(Stream& os, const std::vector<T, A>& v, int nType, int nVersion, const boost::true_type&);
+template<typename Stream, typename T, typename A> void Serialize_impl(Stream& os, const std::vector<T, A>& v, int nType, int nVersion, const boost::false_type&);
+template<typename Stream, typename T, typename A> inline void Serialize(Stream& os, const std::vector<T, A>& v, int nType, int nVersion);
 #endif

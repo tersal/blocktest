@@ -395,4 +395,147 @@ template<typename Stream, typename T, typename A>
 inline void Unserialize(Stream& is, std::vector<T, A>& v, int nType, int nVersion) {
     Unserialize_impl(is, v, nType, nVersion, boost::is_fundamental<T>());
 }
+
+// Derived from Vector
+inline unsigned int GetSerializeSize(const CScript& v, int nType, int nVersion) {
+    return GetSerializeSize((const std::vector<unsigned char>&)v, nType, nVersion);
+}
+
+template<typename Stream>
+void Serialize(Stream& os, const CScript& v, int nType, int nVersion) {
+    Serialize(os, (const std::vector<unsigned char>&)v, nType, nVersion);
+}
+
+template<typename Stream>
+void Unserialize(Stream& is, CScript& v, int nType, int nVersion) {
+    Unserialize(is, (std::vector<unsigned char>&)v, nType, nVersion);
+}
+
+// pair
+template<typename K, typename T>
+unsigned int GetSerializeSize(const std::pair<K, T>& item, int nType, int nVersion) {
+    return GetSerializeSize(item.first, nType, nVersion) + GetSerializeSize(item.second, nType, nVersion);
+}
+
+template<typename Stream, typename K, typename T>
+void Serialize(Stream& os, const std::pair<K, T>& item, int nType, int nVersion) {
+    Serialize(os, item.first, nType, nVersion);
+    Serialize(os, item.second, nType, nVersion);
+}
+
+template<typename Stream, typename K, typename T>
+void Unserialize(Stream& is, std::pair<K, T>& item, int nType, int nVersion) {
+    Unserialize(is, item.first, nType, nVersion);
+    Unserialize(is, item.second, nType, nVersion);
+}
+
+// map
+template<typename K, typename T, typename Pred, typename A>
+unsigned int GetSerializeSize(const std::map<K, T, Pred, A>& m, int nType, int nVersion) {
+    unsigned int nSize = GetSizeOfCompactSize(m.size());
+    for (typename std::map<K, T, Pred, A>::const_iterator mi = m.begin(); mi != m.end(); mi++)
+        nSize += GetSerializeSize((*mi), nType, nVersion);
+    return nSize;
+}
+
+template<typename Stream, typename K, typename T, typename Pred, typename A>
+void Serialize(Stream& os, const std::map<K, T, Pred, A>& m, int nType, int nVersion) {
+    WriteCompactSize(os, m.size());
+    for (typename std::map<K, T, Pred, A>::const_iterator mi = m.begin(); mi != m.end(); mi++)
+        Serialize(os, (*mi), nType, nVersion);
+}
+
+template<typename Stream, typename K, typename T, typename Pred, typename A>
+void Unserialize(Stream& is, std::map<K, T, Pred, A>& m, int nType, int nVersion) {
+    m.clear();
+    unsigned int nSize = ReadCompactSize(is);
+    typename std::map<K, T, Pred, A>::iterator mi = m.begin();
+    for (unsigned int i = 0; i < nSize; i++) {
+        std::pair<K, T> item;
+        Unserialize(is, item, nType, nVersion);
+        mi = m.insert(mi, item);
+    }
+}
+
+// set
+template<typename K, typename Pred, typename A>
+unsigned int GetSerializeSize(const std::set<K, Pred, A>& m, int nType, int nVersion) {
+    unsigned int nSize = GetSizeOfCompactSize(m.size());
+    for (typename std::set<K, Pred, A>::const_iterator it = m.begin(); it != m.end(); it++)
+        nSize += GetSerializeSize((*it), nType, nVersion);
+    return nSize;
+}
+
+template<typename Stream, typename K, typename Pred, typename A>
+void Serialize(Stream& os, const std::set<K, Pred, A>& m, int nType, int nVersion) {
+    WriteCompactSize(os, m.size());
+    for (typename std::set<K, Pred, A>::const_iterator it = m.begin(); it != m.end(); it++)
+        Serialize(os, (*it), nType, nVersion);
+}
+
+template<typename Stream, typename K, typename Pred, typename A>
+void Unserialize(Stream& is, std::set<K, Pred, A>& m, int nType, int nVersion) {
+    m.clear();
+    int nSize = ReadCompactSize(is);
+    typename std::set<K, Pred, A>::iterator it = m.begin();
+    for (unsigned int i = 0; i < nSize; i++) {
+        K key;
+        Unserialize(is, key, nType, nVersion);
+        it = m.insert(it, key);
+    }
+}
+
+// Support for IMPLEMENT_SERIALIZE and READWRITE macro
+class CSerActionGetSerializeSize { };
+class CSerActionSerialize { };
+class CSerActionUnserialize { };
+
+template<typename Stream, typename T>
+inline unsigned int SerReadWrite(Stream& s, const T& obj, int nType, int nVersion, CSerActionGetSerializeSize ser_action) {
+    return ::GetSerializeSize(obj, nType, nVersion);
+}
+
+template<typename Stream, typename T>
+inline unsigned int SerReadWrite(Stream& s, const T& obj, int nType, int nVersion, CSerActionSerialize ser_action) {
+    ::Serialize(s, obj, nType, nVersion);
+    return 0;
+}
+
+template<typename Stream, typename T>
+inline unsigned int SerReadWrite(Stream& s, T& obj, int nType, int nVersion, CSerActionUnserialize ser_action) {
+    ::Unserialize(s, obj, nType, nVersion);
+    return 0;
+}
+
+struct ser_streamplaceholder {
+    int nType;
+    int nVersion;
+}
+
+// Allocator that clears its contents before deletion
+template<typename T>
+struct secure_allocator : public std::allocator<T> {
+    // MSVC8 default copy constructor is broken
+    typedef std::allocator<T> base;
+    typedef typename base::size_type size_type;
+    typedef typename base::difference_type difference_type;
+    typedef typename base::pointer pointer;
+    typedef typename base::const_pointer const_pointer;
+    typedef typename base::reference reference;
+    typedef typename base::const_reference const_reference;
+    typedef typename base::value_type value_type;
+    secure_allocator() throw() {}
+    secure_allocator(const secure_allocator& a) throw() : base(a) {}
+    ~secure_allocator() throw() {}
+    template<typename _Other> struct rebind
+    { typedef secure_allocator<_Other> other; };
+    
+    void deallocate(T* p, std::size_t n) {
+        if (p != NULL)
+            memset(p, 0, sizeof(T) * n);
+        allocator<T>::deallocate(p, n);
+    }
+}
+
+
 #endif

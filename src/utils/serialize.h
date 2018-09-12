@@ -3,6 +3,11 @@
 // Copyright (c) 2009 Satoshi Nakamoto
 // Distributed under the MIT/X11 software license, see the accompanying
 // file license.txt or http://www.opensource.org/licenses/mit-license.php.
+#include <limits.h>
+
+#include <ios>
+#include <set>
+#include <string>
 #include <vector>
 #include <map>
 
@@ -81,7 +86,7 @@ inline unsigned int GetSerializeSize(int64 a,              int, int = 0) { retur
 inline unsigned int GetSerializeSize(uint64 a,             int, int = 0) { return sizeof(a);  }
 inline unsigned int GetSerializeSize(float a,              int, int = 0) { return sizeof(a);  }
 inline unsigned int GetSerializeSize(double a,             int, int = 0) { return sizeof(a);  }
-inline unsigned int GetSerializeSize(bool a,               int, int = 0) { return sizeof(char)}
+inline unsigned int GetSerializeSize(bool a,               int, int = 0) { return sizeof(char);}
 
 template<typename Stream> inline void Serialize(Stream& s, char a,                      int, int  = 0) { WRITEDATA(s, a);             }
 template<typename Stream> inline void Serialize(Stream& s, signed char a,               int, int  = 0) { WRITEDATA(s, a);             }
@@ -198,7 +203,7 @@ class CFlatData {
 		void Unserialize(Stream& s, int, int = 0) {
 			s.read(pbegin, pend - pbegin);
 		}
-}
+};
 
 //
 // string stored as a fixed length field
@@ -206,12 +211,12 @@ class CFlatData {
 template<std::size_t LEN>
 class CFixedFieldString {
 	protected:
-		const string* pcstr;
-		string* pstr;
+        const std::string* pcstr;
+        std::string* pstr;
 		
 	public:
-		explicit CFixedFieldString(const string& str) : pcstr(&str), pstr(NULL) { }
-		explicit CFixedFieldString(string& str) : pcstr(&str), pstr(&str) { }
+        explicit CFixedFieldString(const std::string& str) : pcstr(&str), pstr(NULL) { }
+        explicit CFixedFieldString(std::string& str) : pcstr(&str), pstr(&str) { }
 		
 		unsigned int GetSerializeSize(int, int = 0) const {
 			return LEN;
@@ -220,8 +225,8 @@ class CFixedFieldString {
 		template<typename Stream>
 		void Serialize(Stream& s, int, int = 0) const {
 			char pszBuf[LEN];
-			strncpy(pzsBuf, pcstr->c_str(), LEN);
-			s.write(pszBuf, LEN)
+            strncpy(pszBuf, pcstr->c_str(), LEN);
+            s.write(pszBuf, LEN);
 		}
 		
 		template<typename Stream>
@@ -229,21 +234,21 @@ class CFixedFieldString {
 			if (pstr == NULL) {
 				throw std::ios_base::failure("CFixedFieldString::Unserialize : Trying to unserialize to const string");
 			}
-			char pzsBuf[LEN + 1];
+            char pszBuf[LEN + 1];
 			s.read(pszBuf, LEN);
 			pszBuf[LEN] = '\0';
 			*pstr = pszBuf;
 		}
-}
+};
 
 //
 // Forward declaration
 //
 
 // string
-template<typename C> unsigned int GetSerializeSize(const basic_string<C>& str, int, int = 0);
-template<typename Stream, typename C> void Serialize(Stream& os, const basic_string<C>& str, int, int = 0);
-template<typename Stream, typename C> void Unserialize(Stream& is, basic_string<C>& str, int, int = 0);
+template<typename C> unsigned int GetSerializeSize(const std::basic_string<C>& str, int, int = 0);
+template<typename Stream, typename C> void Serialize(Stream& os, const std::basic_string<C>& str, int, int = 0);
+template<typename Stream, typename C> void Unserialize(Stream& is, std::basic_string<C>& str, int, int = 0);
 
 // Vector
 template<typename T, typename A> unsigned int GetSerializeSize(const std::vector<T, A>& v, int nType, int nVersion, const boost::true_type&);
@@ -282,7 +287,7 @@ template<typename Stream, typename K, typename Pred, typename A> void Unserializ
 // The compiler will only cast int to long if none of the other templates matched.
 template<typename T>
 inline unsigned int GetSerializeSize(const T& a, long nType, int nVersion  = VERSION) {
-	return a.GetSerializeSize((static_cast<int>(nType), nVersion);
+    return a.GetSerializeSize(static_cast<int>(nType), nVersion);
 }
 
 template<typename Stream, typename T>
@@ -299,12 +304,12 @@ inline void Unserialize(Stream& is, T& a, long nType, int nVersion = VERSION) {
 // string
 //
 template<typename C>
-unsigned int GetSerializeSize(const basic_string<C>& str, int, int) {
+unsigned int GetSerializeSize(const std::basic_string<C>& str, int, int) {
 	return GetSizeOfCompactSize(str.size()) + (str.size() * sizeof(str[0]));
 }
 
 template<typename Stream, typename C>
-void Serialize(Stream& os, const basic_string<C>& str, int, int) {
+void Serialize(Stream& os, const std::basic_string<C>& str, int, int) {
 	writeCompactSize(os, str.size());
 	if (!str.empty()) {
 		os.write((char*)&str[0], str.size() * sizeof(str[0]));
@@ -312,7 +317,7 @@ void Serialize(Stream& os, const basic_string<C>& str, int, int) {
 }
 
 template<typename Stream, typename C>
-void Unserialize(Stream& is, basic_string<C>& str, int, int) {
+void Unserialize(Stream& is, std::basic_string<C>& str, int, int) {
 	unsigned int nSize = ReadCompactSize(is);
 	str.resize(nSize);
 	if (nSize != 0) {
@@ -325,7 +330,7 @@ void Unserialize(Stream& is, basic_string<C>& str, int, int) {
 //
 template<typename T, typename A>
 unsigned int GetSerializeSize_impl(const std::vector<T, A>& v, int nType, int nVersion, const boost::true_type&) {
-	return (GetSizeOfCompactSize(v.size()) + (v.size() * sizeof(T));
+    return (GetSizeOfCompactSize(v.size()) + (v.size() * sizeof(T)));
 }
 
 template<typename T, typename A>
@@ -368,7 +373,7 @@ void Unserialize_impl(Stream& is, std::vector<T, A>& v, int nType, int nVersion,
     unsigned int nSize = ReadCompactSize(is);
     unsigned int i = 0;
     while(i < nSize) {
-        unsigned int blk = min(nSize - i, static_cast<unsigned int>(1 + 4999999 / sizeof(T)));
+        unsigned int blk = std::min(nSize - i, static_cast<unsigned int>(1 + 4999999 / sizeof(T)));
         v.resize(i + blk);
         is.read((char*)&v[i], blk * sizeof(T));
         i += blk;
@@ -510,7 +515,7 @@ inline unsigned int SerReadWrite(Stream& s, T& obj, int nType, int nVersion, CSe
 struct ser_streamplaceholder {
     int nType;
     int nVersion;
-}
+};
 
 // Allocator that clears its contents before deletion
 template<typename T>
@@ -533,9 +538,9 @@ struct secure_allocator : public std::allocator<T> {
     void deallocate(T* p, std::size_t n) {
         if (p != NULL)
             memset(p, 0, sizeof(T) * n);
-        allocator<T>::deallocate(p, n);
+        std::allocator<T>::deallocate(p, n);
     }
-}
+};
 
 
 #endif

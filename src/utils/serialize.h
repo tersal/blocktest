@@ -542,5 +542,49 @@ struct secure_allocator : public std::allocator<T> {
     }
 };
 
+// Double ended buffer combining vector and stream-like interfaces.
+// >> and << read and write unformatted data using above serialization templates.
+// Fills with data in linear time; some stringstream implementations take N^2 time.
+class CDataStream {
+    protected:
+        typedef std::vector<char, secure_allocator<char>> vector_type;
+        vector_type vch;
+        unsigned int nReadPos;
+        short state;
+        short exceptMask;
+    public:
+        int nType;
+        int nVersion;
+        
+        typedef vector_type::allocator_type     allocator_type;
+        typedef vector_type::size_type          size_type;
+        typedef vector_type::difference_type    difference_type;
+        typedef vector_type::reference          reference;
+        typedef vector_type::const_reference    const_reference;
+        typedef vector_type::value_type         value_type;
+        typedef vector_type::iterator           iterator;
+        typedef vector_type::const_iterator     const_iterator;
+        typedef vector_type::reverse_iterator   reverse_iterator;
+        
+        explicit CDataStream(int nTypeIn = 0, int nVersionIn = VERSION) {
+            Init(nTypeIn, nVersionIn);
+        }
+        
+        CDataStream(const_iterator pbegin, const_iterator pend, int nTypeIn = 0, int nVersionIn = VERSION) : vch(pbegin, pend) {
+            Init(nTypeIn, nVersionIn);
+        }
+        
+        CDataStream(const vector_type& vchIn, int nTypeIn = 0, int nVersionIn = VERSION) : vch(vchIn.begin(), vchIn.end()) {
+            Init(nTypeIn, nVersionIn);
+        }
+        
+        CDataStream(const std::vector<char>& vchIn, int nTypeIn = 0, int nVersionIn = VERSION) : vch(vchIn.begin(), vchIn.end()) {
+            Init(nTypeIn, nVersionIn);
+        }
+        
+        CDataStream(const std::vector<unsigned char>&vchIn, int nTypeIn = 0, int nVersionIn = VERSION) : vch((char*)&vchIn.begin()[0], (char*)&vchIn.end()[0]) {
+            Init(nTypeIn, nVersionIn);
+        }
+}
 
 #endif

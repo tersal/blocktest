@@ -585,6 +585,53 @@ class CDataStream {
         CDataStream(const std::vector<unsigned char>&vchIn, int nTypeIn = 0, int nVersionIn = VERSION) : vch((char*)&vchIn.begin()[0], (char*)&vchIn.end()[0]) {
             Init(nTypeIn, nVersionIn);
         }
+        
+        void Init(int nTypeIn = 0, nVersionIn = VERSION) {
+            nReadPos = 0;
+            nType = nTypeIn;
+            nVersion = nVersionIn;
+            state = 0;
+            exceptmask = ios::badbit | ios::failbit;
+        }
+        
+        CDataStream& operator+=(const CDataStream& b) {
+            vch.insert(vch.end(), b.begin(), b.end());
+            return *this;
+        }
+        
+        friend CDataStream operator+(const CDataStream& a, const CDataStream& b) {
+            CDataStream ret = a;
+            ret += b;
+            return ret;
+        }
+        
+        string str() const {
+            return(string(begin(), end()));
+        }
+        
+        // Vector subset
+        const_iterator begin() const                                           { return vch.begin() + nReadPos; }
+        iterator begin()                                                       { return vch.begin() + nReadPos; }
+        const_iterator end() const                                             { return vch.end(); }
+        iterator end()                                                         { return vch.end(); }
+        size_type size() const                                                 { return vch.size() - nReadPos; }
+        bool empty() const                                                     { return vch.size() == nReadPos; }
+        void resize(size_type n, value_type c = 0)                             { vch.resize(n + nReadPos, c); }
+        void reserve(size_type n)                                              { vch.reserve(n + nReadPos); }
+        const_reference operator[](size_type pos) const                        { return vch[pos + nReadPos]; }
+        reference operator[](size_type pos)                                    { return vch[pos + nReadPos]; }
+        void clear()                                                           { vch.clear(); nReadPos = 0; }
+        iterator insert(iterator it, const char& x = char())                   { return vch.insert(it, x); }
+        void insert(iterator it, size_type n, const char& x)                   { vch.insert(it, n, x); }
+        
+        void insert(iterator it, const_iterator first, const_iterator last) {
+            if ((it == vch.begin() + nReadPos) && (last - first <= nReadPos)) {
+                // Special case for inserting at the front when there's room
+                nReadPos -= (last -first);
+            } else {
+                vch.insert(it, first, last);
+            }
+        }
 }
 
 #endif

@@ -636,6 +636,50 @@ class CDataStream {
                 vch.insert(it, first, last);
             }
         }
+        
+        iterator erase(iterator it) {
+            if(it == vch.begin() + nReadPos) {
+                // special case for erasing from the front
+                if (++nReadpos >= vch.size()) {
+                    // when we reach the end, we clear the buffer
+                    nReadPos = 0;
+                    return vch.erase(vch.begin(), vch.end());
+                }
+                return vch.begin() + nReadPos;
+            }
+            else {
+                return vch.erase(it);
+            }
+        }
+        
+        iterator erase(iterator first, iterator last) {
+            if(first == vch.begin() + nReadPos) {
+                // erasing from the front
+                if(last = vch.end()) {
+                    nReadPos = 0;
+                    return vch.erase(vch.begin(), vch.end());
+                } else {
+                    nReadPos = (last - vch.begin());
+                    return last;
+                }
+            }
+            else {
+                return vch.erase(first, last);
+            }
+        }
+        
+        inline void Compact() {
+            vch.erase(vch.begin(), vch.begin() + nReadPos);
+            nReadPos = 0;
+        }
+        
+        bool Rewind(size_type n) {
+            // Rewind by n characters if the buffer hasn't been compacted yet
+            if (n > nReadPos)
+                return false;
+            nReadPos -= n;
+            return true;
+        }
 };
 
 #endif

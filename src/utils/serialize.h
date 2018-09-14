@@ -5,11 +5,14 @@
 // file license.txt or http://www.opensource.org/licenses/mit-license.php.
 #include <limits.h>
 
-#include <ios>
+#include <iostream>
+#include <cstring>
 #include <set>
 #include <string>
 #include <vector>
 #include <map>
+
+#include <boost/type_traits.hpp>
 
 typedef long long int64;
 typedef unsigned long long uint64;
@@ -70,8 +73,8 @@ enum {
 //
 // Basic Types
 //
-#define WRITEDATA(s, obj)    s.write((char*)&(obj), sizeof(obj))
-#define READDATA(s, obj)     s.read((char*)&(obj), sizeof(obj))
+#define WRITEDATA(s, obj)    s.write(reinterpret_cast<char*>(&(obj)), sizeof(obj))
+#define READDATA(s, obj)     s.read(reinterpret_cast<char*>(&(obj)), sizeof(obj))
 
 inline unsigned int GetSerializeSize(char a,               int, int = 0) { return sizeof(a);  }
 inline unsigned int GetSerializeSize(signed char a,        int, int = 0) { return sizeof(a);  }
@@ -586,12 +589,12 @@ class CDataStream {
             Init(nTypeIn, nVersionIn);
         }
         
-        void Init(int nTypeIn = 0, nVersionIn = VERSION) {
+        void Init(int nTypeIn = 0, int nVersionIn = VERSION) {
             nReadPos = 0;
             nType = nTypeIn;
             nVersion = nVersionIn;
             state = 0;
-            exceptmask = ios::badbit | ios::failbit;
+            exceptMask = std::ios::badbit | std::ios::failbit;
         }
         
         CDataStream& operator+=(const CDataStream& b) {
@@ -605,8 +608,8 @@ class CDataStream {
             return ret;
         }
         
-        string str() const {
-            return(string(begin(), end()));
+        std::string str() const {
+            return(std::string(begin(), end()));
         }
         
         // Vector subset
@@ -633,6 +636,6 @@ class CDataStream {
                 vch.insert(it, first, last);
             }
         }
-}
+};
 
 #endif

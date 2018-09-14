@@ -20,3 +20,6 @@ HEADERS += \
     src/base/transaction.h \
     src/utils/serialize.h \
     src/utils/types.h
+
+INCLUDEPATH += \
+    /usr/local/boost/include

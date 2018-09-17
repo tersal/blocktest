@@ -680,6 +680,100 @@ class CDataStream {
             nReadPos -= n;
             return true;
         }
+        
+        // Stream subset
+        void setstate(short bits, const char* psz) {
+            state |= bits;
+            if (state & exceptmask) 
+                throw std::ios_base::failure(psz);
+        }
+        
+        bool eof() const                                   { return size() == 0; }
+        bool fail() const                                  { return state & (std::ios::badbit | std::ios::failbit); }
+        bool good() const                                  { return !eof() && (state == 0); }
+        void clear(short n)                                { state = n; }
+        short exceptions()                                 { return exceptmask; }
+        short exceptions(short mask)                       { short prev = exceptmask; exceptmask = mask; setstate(0, "CDataStream"); return prev; }
+        CDataStream* rdbuf()                               { return this; }
+        int in_avail()                                     { return size(); }
+        
+        void SetType(int n)                                { nType = n; }
+        int GetType()                                      { return nType; }
+        void SetVersion(int n)                             { nVersion = n; }
+        int GetVersion()                                   { return nVersion; }
+        void ReadVersion()                                 { *this >> nVersion; }
+        void WriteVersion()                                { *this << nVersion; }
+        
+        CDataStream& read(char* pch, int nSize) {
+            // Read from the beginning of the buffer
+            assert(nSize >= 0);
+            unsigned int nReadPosNext = nReadPos + nSize;
+            if (nReadPosNext >= vch.size()) {
+                if(nReadPosNext > vch.size()) {
+                    setstate(std::ios::failbit, "CDataStream::read() : end of data");
+                    memset(pch, o nSize);
+                    nSize = vch.size() - nReadPos;
+                }
+                memcpy(pch, &vch[nReadPos], nSize);
+                nReadPos = 0;
+                vch.clear();
+                return (*this);
+            }
+            memcpy(pch, &vch[nReadPos], nSize);
+            nReadPos = nReadPosNext;
+            return (*this);
+        }
+        
+        CDataStream& ignore(int nSize) {
+            // ignore from the beginning of the buffer
+            assert(nSize >= 0);
+            unsigned int nReadPosNext = nReadPos + nSize;
+            if(nReadPosNext >= vch.size()) {
+                if (nReadPosNext > vch.size()) {
+                    setstate(std::ios::failbit, "CDataStream::ignore() : end of data");
+                    nSize = vch.size() - nReadPos;
+                }
+                nReadPos = 0;
+                vch.clear();
+                return (*this);
+            }
+            nReadPos = nReadPosNext;
+            return (*this);
+        }
+        
+        CDataStream& write(const char* pch, int nSize) {
+            // Write at the end of the buffer
+            assert(nSize >= 0);
+            vch.insert(vch.end(), pch, pch + nSize);
+            return (*this);
+        }
+        
+        template<typename Stream>
+        void Serialize(Stream& s, int nType = 0, int nVersion = VERSION) const {
+            // Special case: stream << stream concatenates like stream += stream
+            if (!vch.empty())
+                s.write((char*)&vch[0], vch.size() * sizeof(vch[0]));
+        }
+        
+        template<typename T>
+        unsigned int GetSerializeSize(const T& obj) {
+            // Tells the size of the object if serialized to this stream
+            return ::GetSerializeSize(obj, nType, nVersion);
+        }
+        
+        template<typename T>
+        CDataStream& operator<<(const T& obj) {
+            // Serialize to this stream
+            ::Serialize(*this, obj, nType, nVersion);
+            return (*this);
+        }
+        
+        template<typename T>
+        CDataStream& operator>>(T& obj) {
+            // Unserialize from this stream
+            ::Unserialize(*this, obj, nType, nVersion);
+            return (*this);
+        }
 };
 
 #endif

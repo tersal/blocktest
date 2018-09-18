@@ -17,7 +17,16 @@
 typedef long long int64;
 typedef unsigned long long uint64;
 
+class CScript;
+class CDataStream;
+class CAutoFile;
+
 static const int VERSION = 101;
+
+template<typename T>
+inline T& REF(const T& val) {
+    return const_cast<T&>(val);
+}
 
 /////////////////////////////////////////////////////////////////
 //
@@ -39,19 +48,21 @@ enum {
 #define IMPLEMENT_SERIALIZE(statements)      \
 	unsigned int GetSerializeSize(int nType = 0, int nVersion = VERSION) const \
 	{                                                                          \
+        CSerActionGetSerializeSize ser_action;                                 \
 		const bool fGetSize = true;                                            \
 		const bool fWrite = false;                                             \
 		const bool fRead = false;                                              \
 		unsigned int nSerSize = 0;                                             \
 		ser_streamplaceholder s;                                               \
 		s.nType = nType;                                                       \
-		s.nVersion = nVersion                                                  \
+		s.nVersion = nVersion;                                                 \
 		{statements}                                                           \
 		return nSerSize;                                                       \
 	}                                                                          \
 	template<typename Stream>                                                  \
 	void Serialize(Stream& s, int nType = 0, int nVersion = VERSION) const     \
 	{                                                                          \
+        CSerActionSerialize ser_action;                                        \
 		const bool fGetSize = false;                                           \
 		const bool fWrite = true;                                              \
 		const bool fRead = false;                                              \
@@ -59,8 +70,9 @@ enum {
 		{statements}                                                           \
 	}                                                                          \
 	template<typename Stream>                                                  \
-	void Unserialize(stream& s, int nType = 0, int nVersion = VERSION)         \
+	void Unserialize(Stream& s, int nType = 0, int nVersion = VERSION)         \
 	{                                                                          \
+        CSerActionUnserialize ser_action;                                      \
 		const bool fGetSize = false;                                           \
 		const bool fWrite = false;                                             \
 		const bool fRead = true;                                               \
@@ -68,7 +80,7 @@ enum {
 		{statements}                                                           \
 	}
 	
-#define READWRITE(obj)      (nSerSize += ::SerReadWrite(s, (obj), nType, nVersion))
+#define READWRITE(obj)      (nSerSize += ::SerReadWrite(s, (obj), nType, nVersion, ser_action))
 
 //
 // Basic Types
@@ -254,8 +266,8 @@ template<typename Stream, typename C> void Serialize(Stream& os, const std::basi
 template<typename Stream, typename C> void Unserialize(Stream& is, std::basic_string<C>& str, int, int = 0);
 
 // Vector
-template<typename T, typename A> unsigned int GetSerializeSize(const std::vector<T, A>& v, int nType, int nVersion, const boost::true_type&);
-template<typename T, typename A> unsigned int GetSerializeSize(const std::vector<T, A>& v, int nType, int nVersion, const boost::false_type&);
+template<typename T, typename A> unsigned int GetSerializeSize_impl(const std::vector<T, A>& v, int nType, int nVersion, const boost::true_type&);
+template<typename T, typename A> unsigned int GetSerializeSize_impl(const std::vector<T, A>& v, int nType, int nVersion, const boost::false_type&);
 template<typename T, typename A> inline unsigned int GetSerializeSize(const std::vector<T, A>& v, int nType, int nVersion = VERSION);
 template<typename Stream, typename T, typename A> void Serialize_impl(Stream& os, const std::vector<T, A>& v, int nType, int nVersion, const boost::true_type&);
 template<typename Stream, typename T, typename A> void Serialize_impl(Stream& os, const std::vector<T, A>& v, int nType, int nVersion, const boost::false_type&);
@@ -313,7 +325,7 @@ unsigned int GetSerializeSize(const std::basic_string<C>& str, int, int) {
 
 template<typename Stream, typename C>
 void Serialize(Stream& os, const std::basic_string<C>& str, int, int) {
-	writeCompactSize(os, str.size());
+	WriteCompactSize(os, str.size());
 	if (!str.empty()) {
 		os.write((char*)&str[0], str.size() * sizeof(str[0]));
 	}
@@ -484,7 +496,7 @@ void Serialize(Stream& os, const std::set<K, Pred, A>& m, int nType, int nVersio
 template<typename Stream, typename K, typename Pred, typename A>
 void Unserialize(Stream& is, std::set<K, Pred, A>& m, int nType, int nVersion) {
     m.clear();
-    int nSize = ReadCompactSize(is);
+    unsigned int nSize = ReadCompactSize(is);
     typename std::set<K, Pred, A>::iterator it = m.begin();
     for (unsigned int i = 0; i < nSize; i++) {
         K key;
@@ -711,7 +723,7 @@ class CDataStream {
             if (nReadPosNext >= vch.size()) {
                 if(nReadPosNext > vch.size()) {
                     setstate(std::ios::failbit, "CDataStream::read() : end of data");
-                    memset(pch, o nSize);
+                    memset(pch, 0, nSize);
                     nSize = vch.size() - nReadPos;
                 }
                 memcpy(pch, &vch[nReadPos], nSize);
@@ -771,6 +783,133 @@ class CDataStream {
         template<typename T>
         CDataStream& operator>>(T& obj) {
             // Unserialize from this stream
+            ::Unserialize(*this, obj, nType, nVersion);
+            return (*this);
+        }
+};
+
+#ifdef TESTCDATASTREAM
+#include <iostream>
+int main(int argc, char* argv[]) {
+    vector<unsigned char> vch(0xcc, 250);
+    printf("CDataStream:\n");
+    for(int n = 1000; n <= 4500000; n *= 2) {
+        CDataStream ss;
+        time_t nStart = time(NULL);
+        for (int i = 0; i < n; i++) {
+            ss.write((char*)&vch[0], vch.size());
+        }
+        printf("n=%-10d %d seconds\n", n, time(NULL) - nStart);
+    }
+    printf("stringstream:\n");
+    for (int n = 1000; n <= 4500000; n *= 2) {
+        stringstream ss;
+        time_t nStart = time(NULL);
+        for (int i = 0; i < n; i++)
+            ss.write((char*)&vch[0], vch.size());
+        printf("n=%-10d %d seconds\n", n, time(NULL) - nStart);
+    }
+}
+#endif
+
+// automatic closing wrapper for FILE*
+// - Will automatically close the file when it goes out of scope if not null.
+// - If you're returning the file pointer, return file.release().
+// - If you need to close the file early, use file.fclose() instead of fclose(file).
+
+class CAutoFile {
+    protected:
+        FILE* file;
+        short state;
+        short exceptmask;
+    public:
+        int nType;
+        int nVersion;
+        
+        typedef FILE element_type;
+        
+        CAutoFile(FILE* filenew = NULL, int nTypeIn = SER_DISK, int nVersionIn = VERSION) {
+            file = filenew;
+            nType = nTypeIn;
+            nVersion = nVersionIn;
+            state = 0;
+            exceptmask = std::ios::badbit | std::ios::failbit;
+        }
+        
+        ~CAutoFile() {
+            fclose();
+        }
+        
+        void fclose() {
+            if (file != NULL && file != stdin && file != stdout && file != stderr)
+                ::fclose(file);
+            file = NULL;
+        }
+        
+        FILE* release()                    { FILE* ret = file; file = NULL; return ret; }
+        operator FILE*()                   { return file; }
+        FILE* operator->()                 { return file; }
+        FILE& operator*()                  { return *file; }
+        FILE** operator&()                 { return &file; }
+        FILE* operator=(FILE* pnew)        { return file = pnew; }
+        bool operator!()                   { return (file == NULL); }
+        
+        // Stream subset
+        void setstate(short bits, const char* psz) {
+            state |= bits;
+            if (state & exceptmask)
+                throw std::ios_base::failure(psz);
+        }
+        
+        bool fail() const                     { return state & (std::ios::badbit | std::ios::failbit); }
+        bool good() const                     { return state == 0; }
+        void clear(short n = 0)               { state = n; }
+        short exceptions()                    { return exceptmask; }
+        short exceptions(short mask)          { short prev = exceptmask; exceptmask = mask; setstate(0, "CAutoFile"); return prev; }
+        
+        void SetType(int n)                   { nType = n; }
+        int GetType()                         { return nType; }
+        void SetVersion(int n)                { nVersion = n; }
+        int GetVersion()                      { return nVersion; }
+        void ReadVersion()                    { *this >> nVersion; }
+        void WriteVersion()                   { *this << nVersion; }
+        
+        CAutoFile& read(char* pch, int nSize) {
+            if (!file)
+                throw std::ios_base::failure("CAutoFile::read : file handle is NULL");
+            if (fread(pch, 1, nSize, file) != nSize)
+                setstate(std::ios::failbit, feof(file) ? "CAutoFile::read : end of file" : "CAutoFile::read : fread failed");
+            return (*this);
+        }
+        
+        CAutoFile& write(const char* pch, int nSize) {
+            if (!file)
+                throw std::ios_base::failure("CAutoFile::write : file handle is NULL");
+            if (fwrite(pch, 1, nSize, file) != nSize)
+                setstate(std::ios::failbit, "CAutoFile::write : write failed");
+            return (*this);
+        }
+        
+        template<typename T>
+        unsigned int GetSerializeSize(const T& obj) {
+            // Tells the size of the object if serialized to this stream
+            return ::GetSerializeSize(obj, nType, nVersion);
+        }
+        
+        template<typename T>
+        CAutoFile& operator<<(const T& obj) {
+            // Serialize to this stream
+            if (!file)
+                throw std::ios_base::failure("CAutoFile::operator<< : file handle is NULL");
+            ::Serialize(*this, obj, nType, nVersion);
+            return (*this);
+        }
+        
+        template<typename T>
+        CAutoFile& operator>>(T& obj) {
+            // Unserialize from this stream
+            if (!file)
+                throw std::ios_base::failure("CAutoFile::operator>> : file handle is NULL");
             ::Unserialize(*this, obj, nType, nVersion);
             return (*this);
         }
